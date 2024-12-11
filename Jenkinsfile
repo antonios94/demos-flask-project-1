@@ -1,58 +1,41 @@
 pipeline {
     agent any
     environment {
-        IMAGE_NAME = 'sanjeevkt720/jenkins-flask-app'
+        IMAGE_NAME = 'antonios94/jenkins-flask-app'
         IMAGE_TAG = "${IMAGE_NAME}:${env.BUILD_NUMBER}"
-        KUBECONFIG = credentials('kubeconfig-credentials-id')
+        KUBECONFIG = credentials('kubeconfig')
 
     }
+    
     stages {
-
-        stage('Checkout') {
-            steps {
-                git url: 'https://github.com/kodekloudhub/jenkins-project.git', branch: 'main'
-                sh "ls -ltr"
-            }
-        }
-        stage('Setup') {
-            steps {
-                sh "pip install -r requirements.txt"
-            }
-        }
-        stage('Test') {
-            steps {
-                sh "pytest"
-                sh "whoami"
-            }
-        }
-        stage('Login to docker hub') {
-            steps {
-                withCredentials([string(credentialsId: 'dockerhubpwd', variable: 'dockerhubpwd')]) {
-                sh 'echo ${dockerhubpwd} | docker login -u sanjeevkt720 --password-stdin'}
-                echo 'Login successfully'
-            }
-        }
         stage('Build Docker Image')
         {
             steps
             {
-                sh 'docker build -t ${IMAGE_TAG} .'
+                sh "podman build -t ${IMAGE_TAG} ."
                 echo "Docker image build successfully"
-                sh "docker images"
+                sh "podman images"
             }
         }
-        stage('Push Docker Image')
-        {
-            steps
-            {
-                sh 'docker push ${IMAGE_TAG}'
+        stage('Login to docker hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'docker-hub',usernameVariable:"USERNAME",passwordVariable:"PASSWORD")]) {
+                sh "podman login -u ${USERNAME} -p ${PASSWORD} docker.io" }
+                echo 'Login successfully'
+            }
+        }
+        stage('Push Docker image') {
+            steps {
+		        sh "podman push ${IMAGE_TAG}"
                 echo "Docker image push successfully"
             }
         }
-        stage('Deploy to EKS Cluster') {
+        
+        
+        stage('Deploy to k8s Cluster') {
             steps {
                 sh "kubectl apply -f deployment.yaml"
-                echo "Deployed to EKS Cluster"
+                echo "Deployed to k8s Cluster"
             }
         }
     }
